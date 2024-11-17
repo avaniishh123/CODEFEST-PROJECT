@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate URL Shortener</title>
+    <style>
+        :root {
+            --primary-color: #6a11cb;
+            --secondary-color: #2575fc;
+            --text-color: #ffffff;
+            --background-gradient: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            --box-background: rgba(255, 255, 255, 0.1);
+            --error-color: #ff4d4d;
+            --success-color: #28a745;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: var(--background-gradient);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 500px;
+            animation: fadeIn 1.2s ease-in-out;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1rem;
+            margin-bottom: 20px;
+            color: #bbbbbb;
+        }
+
+        .form-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        input[type="text"] {
+            width: 70%;
+            padding: 15px;
+            border-radius: 5px;
+            border: none;
+            font-size: 1rem;
+            outline: none;
+            background: var(--box-background);
+            color: var(--text-color);
+            caret-color: var(--secondary-color);
+            box-sizing: border-box;
+        }
+
+        input::placeholder {
+            color: #cccccc;
+        }
+
+        button {
+            width: 25%;
+            padding: 15px;
+            height: 48px; /* Ensures all buttons have the same height */
+            border: none;
+            border-radius: 5px;
+            background: var(--primary-color);
+            color: var(--text-color);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            box-sizing: border-box;
+            display: inline-block;
+        }
+
+        button:hover {
+            background: var(--secondary-color);
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--box-background);
+            border-radius: 10px;
+            animation: slideIn 0.8s ease-out;
+            box-sizing: border-box;
+        }
+
+        .result input[type="text"] {
+            width: calc(70% - 10px);
+            padding: 10px;
+            margin-right: 10px;
+            border-radius: 5px;
+            border: none;
+            font-size: 1rem;
+            background: var(--box-background);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        .result button {
+            width: 25%;
+            height: 48px; /* Same height as form-group buttons */
+        }
+
+        .error {
+            color: var(--error-color);
+            margin-top: 10px;
+            font-size: 1rem;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 URL Shortener</h1>
+        <p>Shorten your URLs and get shareable links instantly.</p>
+        <form id="shorten-form">
+            <div class="form-group">
+                <input type="text" id="long-url" placeholder="Enter your original URL" required>
+                <button type="submit">Enter URL</button>
+            </div>
+        </form>
+        <div id="result" class="result" style="display: none;">
+            <input type="text" id="short-url" readonly>
+            <button id="copy-btn">Copy</button>
+        </div>
+        <p id="error-message" class="error" style="display: none;"></p>
+    </div>
+
+    <script>
+        const form = document.getElementById("shorten-form");
+        const resultDiv = document.getElementById("result");
+        const shortUrlInput = document.getElementById("short-url");
+        const copyBtn = document.getElementById("copy-btn");
+        const errorMessage = document.getElementById("error-message");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const longUrl = document.getElementById("long-url").value;
+
+            try {
+                const response = await fetch("/shorten", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ url: longUrl }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    shortUrlInput.value = data.short_url;
+
+                    resultDiv.style.display = "block";
+                    errorMessage.style.display = "none";
+                } else {
+                    resultDiv.style.display = "none";
+                    errorMessage.style.display = "block";
+                    errorMessage.textContent = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.style.display = "none";
+                errorMessage.style.display = "block";
+                errorMessage.textContent = "An error occurred. Please try again.";
+            }
+        });
+
+        copyBtn.addEventListener("click", () => {
+            shortUrlInput.select();
+            document.execCommand("copy");
+            alert("Shortened URL copied to clipboard!");
+        });
+    </script>
+</body>
+</html>
