@@ -1,0 +1,133 @@
+from flask import Flask, request, redirect, jsonify, render_template
+import sqlite3
+import random
+import string
+import os
+from datetime import datetime, timedelta
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Database setup
+DB_PATH = 'urls.db'
+
+# Initialize SQLite database
+def init_db():
+    if not os.path.exists(DB_PATH):
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS urls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                short_code TEXT UNIQUE NOT NULL,
+                original_url TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                click_count INTEGER DEFAULT 0
+            )
+        ''')
+        conn.commit()
+        conn.close()
+
+# Generate a random short code
+def generate_short_code(length=6):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
+# Shorten URL API (Supports Forms and JSON)
+@app.route('/shorten', methods=['POST'])
+def shorten_url():
+    # Accept data from a form or JSON
+    if request.form:  # Form data
+        original_url = request.form.get('url')
+        custom_code = request.form.get('custom_code')
+        expiration_days = request.form.get('expiration_days', type=int)
+    else:  # JSON data
+        data = request.json
+        original_url = data.get('url')
+        custom_code = data.get('custom_code')
+        expiration_days = data.get('expiration_days')
+
+    if not original_url:
+        return jsonify({"error": "URL is required"}), 400
+
+    short_code = custom_code if custom_code else generate_short_code()
+    expires_at = (datetime.now() + timedelta(days=expiration_days)).isoformat() if expiration_days else None
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            'INSERT INTO urls (short_code, original_url, expires_at) VALUES (?, ?, ?)',
+            (short_code, original_url, expires_at)
+        )
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "short_url": request.host_url + short_code
+        }), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({"error": "Short code already exists"}), 400
+
+# Redirect API
+@app.route('/<short_code>', methods=['GET'])
+def redirect_url(short_code):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT original_url, expires_at FROM urls WHERE short_code = ?', (short_code,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if not result:
+        return render_template('error.html', message="Short URL not found"), 404
+
+    original_url, expires_at = result
+    if expires_at and datetime.now() > datetime.fromisoformat(expires_at):
+        return render_template('error.html', message="Short URL has expired"), 410
+
+    # Increment click count
+    increment_click_count(short_code)
+    return redirect(original_url)
+
+# Increment click count
+def increment_click_count(short_code):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE urls SET click_count = click_count + 1 WHERE short_code = ?', (short_code,))
+    conn.commit()
+    conn.close()
+
+# Analytics API
+@app.route('/analytics/<short_code>', methods=['GET'])
+def analytics(short_code):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT original_url, click_count, created_at, expires_at FROM urls WHERE short_code = ?', (short_code,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if not result:
+        return jsonify({"error": "Short URL not found"}), 404
+
+    original_url, click_count, created_at, expires_at = result
+    return jsonify({
+        "original_url": original_url,
+        "click_count": click_count,
+        "created_at": created_at,
+        "expires_at": expires_at
+    })
+
+# Home Route
+@app.route('/')
+def home():
+    return render_template('index.html')  # Serve a simple HTML form for the API
+
+# Favicon Suppression
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)
